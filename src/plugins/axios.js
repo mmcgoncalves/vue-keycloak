@@ -12,42 +12,54 @@ let initOptions = {
 
 let keycloak = new Keycloak(initOptions);  
 
-keycloak.init({  onLoad: 'login-required',   promiseType: 'native', checkLoginIframe: false }).then(function(auth) { 
-    
-    if(!auth) {
-        window.location.reload();
-    } 
-  
-    localStorage.setItem("vue-token", keycloak.token);
-    localStorage.setItem("vue-refresh-token", keycloak.refreshToken);
-  
-    keycloak.updateToken(30).then(function() {       
-
-        const token = keycloak.token  
-        Vue.use({
-            install(Vue) {
-                Vue.prototype.$keycloak = keycloak
-
-                Vue.prototype.$http = axios.create({
-                    baseURL: URL,
-                    headers: {
-                      "Content-type": "application/json; charset=UTF-8",
-                      "Authorization": 'Bearer ' + token
-                    }
-                })
-        
-                Vue.prototype.$http.interceptors.response.use(
-                    res => res,                        
-                    error => Promise.reject(error)
-                )
-        
-            }
-        })
-
-    }).catch(function() {
-        console.error('Failed to refresh token');
+keycloak.onTokenExpired = () => {    
+    keycloak.updateToken(30).then(function() {})
+    .catch(function() {
         keycloak.logout();
     });
+}
+
+keycloak.init({  onLoad: 'login-required',   promiseType: 'native', checkLoginIframe: true }).then(function(authenticated) {
+
+    if (!authenticated) {
+        window.location.reload();        
+    }
+
+    Vue.use({
+        install(Vue) {
+            Vue.prototype.$keycloak = keycloak
+
+            Vue.prototype.$http = axios.create({
+                baseURL: URL,
+                headers: {
+                  "Content-type": "application/json; charset=UTF-8"                      
+                }
+            })                
+
+            Vue.prototype.$http.interceptors.request.use(config => {                
+                config.headers = {                             
+                    'Authorization' : 'Bearer ' + keycloak.token                            
+                }
+
+                return config;                      
+                }, error => Promise.reject(error)
+            )
+    
+            Vue.prototype.$http.interceptors.response.use(res => res, function (error) {
+                const status = error.response ? error.response.status : null                    
+                
+                if (status === null || status === 401) {   
+                    const requestConfig = error.config   
+                    keycloak.onTokenExpired();                                        
+                    requestConfig.headers['Authorization'] = 'Bearer ' + keycloak.token
+                    return axios(requestConfig)                        
+                } else {
+                    return Promise.reject(error)
+                }
+
+            })    
+        }
+    })
 
     keycloak.loadUserProfile().then(function(profile) {        
         localStorage.setItem("vue-user-profile", JSON.stringify(profile, null, "  "));
