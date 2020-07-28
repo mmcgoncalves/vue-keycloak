@@ -5,9 +5,9 @@ import Keycloak from 'keycloak-js'
 const URL = process.env.VUE_APP_ROOT_API
 
 let initOptions = {
-  url: 'https://idm-homologacao.prodam.am.gov.br/auth', 
-  realm: 'Ajuri', 
-  clientId: 'ajuri-wms-web'            
+  url: '', 
+  realm: '', 
+  clientId: ''            
 }
 
 let keycloak = new Keycloak(initOptions);  
